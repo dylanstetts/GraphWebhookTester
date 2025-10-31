@@ -94,10 +94,12 @@ class GraphAuthenticator:
         self.tenant_id = tenant_id
         self.authority = f"https://login.microsoftonline.com/{tenant_id}"
         self.scopes = [
-            "https://graph.microsoft.com/Subscription.Read.All",
-            "https://graph.microsoft.com/Subscription.ReadWrite.All",
-            "https://graph.microsoft.com/Files.ReadWrite.All",
-            "https://graph.microsoft.com/Sites.ReadWrite.All"
+            "https://graph.microsoft.com/Mail.Read",
+            "https://graph.microsoft.com/Calendars.Read",
+            "https://graph.microsoft.com/Contacts.Read",
+            "https://graph.microsoft.com/Files.Read.All",
+            "https://graph.microsoft.com/Sites.Read.All",
+            "https://graph.microsoft.com/User.Read"
         ]
         self.access_token = None
         
@@ -119,6 +121,23 @@ class GraphAuthenticator:
     def authenticate_interactive(self) -> bool:
         """Authenticate using interactive flow"""
         try:
+            # Interactive authentication only works with PublicClientApplication
+            if self.client_secret:
+                raise Exception("Interactive authentication is not supported when using client secret. Please use client credentials flow instead.")
+            
+            # Ensure we have a PublicClientApplication
+            if not isinstance(self.app, msal.PublicClientApplication):
+                self.app = msal.PublicClientApplication(
+                    client_id=self.client_id,
+                    authority=self.authority
+                )
+            
+            # Note: Make sure your Azure App Registration has a redirect URI configured:
+            # - Go to Azure Portal → App registrations → Your app → Authentication
+            # - Add platform → Mobile and desktop applications
+            # - Add redirect URI: http://localhost
+            # - Or use: https://login.microsoftonline.com/common/oauth2/nativeclient
+            
             # Try to get token from cache first
             accounts = self.app.get_accounts()
             if accounts:
@@ -130,7 +149,8 @@ class GraphAuthenticator:
             # Interactive authentication
             result = self.app.acquire_token_interactive(
                 scopes=self.scopes,
-                prompt="select_account"
+                prompt="select_account",
+                parent_window_handle=None  # Use default browser
             )
             
             if result and "access_token" in result:
@@ -750,6 +770,8 @@ class GraphWebhookTesterGUI:
                 
                 # Authenticate based on type
                 if auth_type == "interactive":
+                    if client_secret:
+                        raise Exception("Interactive authentication cannot be used with client secret. Please remove the client secret or switch to app-only authentication.")
                     self._update_auth_status("Opening browser for interactive authentication...")
                     success = self.authenticator.authenticate_interactive()
                 else:
@@ -1400,7 +1422,7 @@ Response: abc123 (plain text, HTTP 200)"""
                             
                             # Show recent activities (most important!)
                             if activities:
-                                details_text += f"\n🎯 RECENT ACTIVITIES ({len(activities)} total):\n"
+                                details_text += f"\nRECENT ACTIVITIES ({len(activities)} total):\n"
                                 
                                 security_activities = []
                                 for j, activity in enumerate(activities[:10], 1):  # Show top 10
@@ -1410,33 +1432,33 @@ Response: abc123 (plain text, HTTP 200)"""
                                     
                                     # Determine activity type
                                     if 'share' in action:
-                                        details_text += f"  {j}. 🔒 SHARE (Security-Related)\n"
+                                        details_text += f"  {j}. SHARE (Security-Related)\n"
                                         recipients = action['share'].get('recipients', [])
                                         recipient_names = []
                                         for recipient in recipients:
                                             user_info = recipient.get('user', {})
                                             name = user_info.get('displayName', user_info.get('email', 'Unknown'))
                                             recipient_names.append(name)
-                                        details_text += f"     👥 Shared with: {', '.join(recipient_names)}\n"
+                                        details_text += f"     Shared with: {', '.join(recipient_names)}\n"
                                         security_activities.append(f"Share with {', '.join(recipient_names)}")
                                     
                                     elif 'rename' in action:
                                         old_name = action['rename'].get('oldName', 'Unknown')
-                                        details_text += f"  {j}. 📝 RENAME\n"
-                                        details_text += f"     📄 From: {old_name}\n"
+                                        details_text += f"  {j}. RENAME\n"
+                                        details_text += f"     From: {old_name}\n"
                                     
                                     elif 'create' in action:
-                                        details_text += f"  {j}. ➕ CREATE\n"
-                                        details_text += f"     📄 New item created\n"
+                                        details_text += f"  {j}. CREATE\n"
+                                        details_text += f"     New item created\n"
                                     
                                     elif 'edit' in action:
-                                        details_text += f"  {j}. ✏️ EDIT\n"
+                                        details_text += f"  {j}. EDIT\n"
                                         if 'version' in action:
                                             version = action['version'].get('newVersion', 'Unknown')
-                                            details_text += f"     📋 New version: {version}\n"
+                                            details_text += f"     New version: {version}\n"
                                     
                                     # Add actor and time info
-                                    details_text += f"     👤 By: {actor.get('displayName', 'Unknown')}\n"
+                                    details_text += f"     By: {actor.get('displayName', 'Unknown')}\n"
                                     recorded_time = time_info.get('recordedDateTime', 'Unknown')
                                     try:
                                         if recorded_time != 'Unknown':
@@ -1446,32 +1468,32 @@ Response: abc123 (plain text, HTTP 200)"""
                                             formatted_time = 'Unknown'
                                     except:
                                         formatted_time = recorded_time
-                                    details_text += f"     ⏰ When: {formatted_time}\n"
+                                    details_text += f"     When: {formatted_time}\n"
                                 
                                 # Highlight security activities
                                 if security_activities:
-                                    details_text += f"\n🔒 SECURITY SUMMARY:\n"
+                                    details_text += f"\nSECURITY SUMMARY:\n"
                                     details_text += f"   Found {len(security_activities)} security-related activity/activities!\n"
                                     for sec_activity in security_activities:
                                         details_text += f"   • {sec_activity}\n"
                             
                             # Show permissions
                             if permissions:
-                                details_text += f"\n� CURRENT PERMISSIONS ({len(permissions)}):\n"
+                                details_text += f"\nCURRENT PERMISSIONS ({len(permissions)}):\n"
                                 for j, perm in enumerate(permissions[:5], 1):  # Show top 5
                                     if 'link' in perm:
                                         link_info = perm['link']
                                         link_type = link_info.get('type', 'unknown')
                                         scope = link_info.get('scope', 'unknown')
-                                        details_text += f"  {j}. 🔗 Link: {link_type} ({scope})\n"
+                                        details_text += f"  {j}. Link: {link_type} ({scope})\n"
                                     elif 'grantedTo' in perm:
                                         granted_to = perm['grantedTo']
                                         if 'user' in granted_to:
                                             user_name = granted_to['user'].get('displayName', 'Unknown')
-                                            details_text += f"  {j}. 👤 User: {user_name}\n"
+                                            details_text += f"  {j}. User: {user_name}\n"
                                         elif 'group' in granted_to:
                                             group_name = granted_to['group'].get('displayName', 'Unknown')
-                                            details_text += f"  {j}. 👥 Group: {group_name}\n"
+                                            details_text += f"  {j}. Group: {group_name}\n"
                             
                             details_text += "\n"
                         
@@ -1481,11 +1503,11 @@ Response: abc123 (plain text, HTTP 200)"""
                         if self.sound_manager:
                             self.sound_manager.play_success_sound()
                     else:
-                        self.root.after(0, lambda: self._update_change_details(f"❌ No analysis results for {filename}"))
+                        self.root.after(0, lambda: self._update_change_details(f"No analysis results for {filename}"))
                 
                 except Exception as e:
-                    error_msg = f"❌ Error during analysis: {str(e)}\n\n"
-                    error_msg += "💡 This might happen if:\n"
+                    error_msg = f"Error during analysis: {str(e)}\n\n"
+                    error_msg += "This might happen if:\n"
                     error_msg += "• Authentication has expired\n"
                     error_msg += "• Network connectivity issues\n"
                     error_msg += "• The resource doesn't support enhanced tracking\n"
@@ -1495,7 +1517,7 @@ Response: abc123 (plain text, HTTP 200)"""
             threading.Thread(target=analyze_worker, daemon=True).start()
             
         except Exception as e:
-            self._update_change_details(f"❌ Error setting up analysis: {str(e)}")
+            self._update_change_details(f"Error setting up analysis: {str(e)}")
     
     def _refresh_changes(self):
         """Refresh the change details display"""
@@ -1511,7 +1533,7 @@ Response: abc123 (plain text, HTTP 200)"""
             
             if not change_files:
                 self._update_change_details("No change analysis files found yet.\n\n"
-                                          "💡 To generate detailed change analysis:\n"
+                                          "To generate detailed change analysis:\n"
                                           "1. Ensure you have webhook notifications in the webhook_notifications folder\n"
                                           "2. Click 'Analyze Latest Webhook' or select a specific file\n"
                                           "3. The system will use Microsoft Graph Enhanced Tracker to get detailed changes")
@@ -1521,7 +1543,7 @@ Response: abc123 (plain text, HTTP 200)"""
             change_files.sort(reverse=True)
             
             # Display summary of available change files
-            summary = f"📊 Found {len(change_files)} change analysis file(s):\n\n"
+            summary = f"Found {len(change_files)} change analysis file(s):\n\n"
             
             for i, filename in enumerate(change_files[:5], 1):  # Show latest 5
                 try:
@@ -1535,17 +1557,17 @@ Response: abc123 (plain text, HTTP 200)"""
                     if 'analysis_summary' in data:
                         summary_count = len(data.get('analysis_summary', []))
                         summary += f"{i}. {filename}\n"
-                        summary += f"   📅 {timestamp}\n"
-                        summary += f"   📊 {summary_count} insights\n\n"
+                        summary += f"   {timestamp}\n"
+                        summary += f"   {summary_count} insights\n\n"
                     elif 'total_changes' in data:
                         change_count = data.get('total_changes', 0)
                         summary += f"{i}. {filename}\n"
-                        summary += f"   📅 {timestamp}\n"
-                        summary += f"   📊 {change_count} detailed changes\n\n"
+                        summary += f"   {timestamp}\n"
+                        summary += f"   {change_count} detailed changes\n\n"
                     else:
                         summary += f"{i}. {filename}\n"
-                        summary += f"   📅 {timestamp}\n"
-                        summary += f"   📊 Analysis file\n\n"
+                        summary += f"   {timestamp}\n"
+                        summary += f"   Analysis file\n\n"
                     
                 except Exception as e:
                     summary += f"{i}. {filename} (Error reading: {e})\n\n"
@@ -1553,7 +1575,7 @@ Response: abc123 (plain text, HTTP 200)"""
             if len(change_files) > 5:
                 summary += f"... and {len(change_files) - 5} more files\n\n"
             
-            summary += "💡 Use 'Analyze Latest Webhook' to create new detailed change analysis."
+            summary += " Use 'Analyze Latest Webhook' to create new detailed change analysis."
             
             self._update_change_details(summary)
             

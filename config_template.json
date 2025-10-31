@@ -6,7 +6,7 @@
   "subscription_defaults": {
     "resource": "/me/drive/root",
     "change_type": "updated",
-    "notification_url": "https://webhook.site/unique-id-here",
+    "notification_url": "https://your.ngrok-free.app/",
     "expiration_hours": "24",
     "include_security_webhooks": true
   }

@@ -70,8 +70,8 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
         if 'validationToken' in query_params:
             validation_token = query_params['validationToken'][0]
             
-            print(f"📧 Webhook validation request received via POST!")
-            print(f"🔑 Validation token: {validation_token}")
+            print(f"Webhook validation request received via POST!")
+            print(f"Validation token: {validation_token}")
             
             # Respond with validation token in plain text
             self.send_response(200)
@@ -79,7 +79,7 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(validation_token.encode('utf-8'))
             
-            print("✅ Validation response sent successfully!")
+            print("Validation response sent successfully!")
             return
         
         # Read the request body for normal notifications
@@ -88,7 +88,7 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
         
         # Handle empty body (validation requests sometimes have empty body)
         if content_length == 0 or not post_data.strip():
-            print("📧 Empty POST request received (likely validation)")
+            print("Empty POST request received (likely validation)")
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
@@ -99,28 +99,28 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             # Parse JSON payload
             notification_data = json.loads(post_data.decode('utf-8'))
             
-            print(f"\n🔔 WEBHOOK NOTIFICATION RECEIVED!")
-            print(f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"📊 Raw payload:")
+            print(f"\nWEBHOOK NOTIFICATION RECEIVED!")
+            print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Raw payload:")
             print(json.dumps(notification_data, indent=2))
             
             # Process notifications
             if 'value' in notification_data:
                 notifications = notification_data['value']
-                print(f"\n📋 Found {len(notifications)} notification(s):")
+                print(f"\nFound {len(notifications)} notification(s):")
                 
                 for i, notification in enumerate(notifications, 1):
                     print(f"\n--- Notification {i} ---")
-                    print(f"🆔 Subscription ID: {notification.get('subscriptionId', 'N/A')}")
-                    print(f"🔄 Change Type: {notification.get('changeType', 'N/A')}")
-                    print(f"📂 Resource: {notification.get('resource', 'N/A')}")
-                    print(f"🎯 Client State: {notification.get('clientState', 'N/A')}")
-                    print(f"⏱️ Subscription Expiration: {notification.get('subscriptionExpirationDateTime', 'N/A')}")
+                    print(f"Subscription ID: {notification.get('subscriptionId', 'N/A')}")
+                    print(f"Change Type: {notification.get('changeType', 'N/A')}")
+                    print(f"Resource: {notification.get('resource', 'N/A')}")
+                    print(f"Client State: {notification.get('clientState', 'N/A')}")
+                    print(f"Subscription Expiration: {notification.get('subscriptionExpirationDateTime', 'N/A')}")
                     
                     # Check for resource data
                     if 'resourceData' in notification:
                         resource_data = notification['resourceData']
-                        print(f"📄 Resource Data:")
+                        print(f"Resource Data:")
                         print(f"   ID: {resource_data.get('id', 'N/A')}")
                         print(f"   Type: {resource_data.get('@odata.type', 'N/A')}")
                         print(f"   ETag: {resource_data.get('@odata.etag', 'N/A')}")
@@ -136,10 +136,10 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             response = {"status": "received", "timestamp": datetime.now().isoformat()}
             self.wfile.write(json.dumps(response).encode('utf-8'))
             
-            print("✅ Notification processed successfully!")
+            print("Notification processed successfully!")
             
         except json.JSONDecodeError as e:
-            print(f"❌ Error parsing JSON: {e}")
+            print(f"Error parsing JSON: {e}")
             print(f"Raw data: {post_data}")
             
             self.send_response(400)
@@ -150,7 +150,7 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(error_response).encode('utf-8'))
         
         except Exception as e:
-            print(f"❌ Error processing notification: {e}")
+            print(f"Error processing notification: {e}")
             
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
@@ -161,10 +161,10 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
     
     def log_request_details(self, method: str):
         """Log request details"""
-        print(f"\n🌐 {method} request received:")
-        print(f"📍 Path: {self.path}")
-        print(f"🏠 Client: {self.client_address}")
-        print(f"📋 Headers:")
+        print(f"\n{method} request received:")
+        print(f"Path: {self.path}")
+        print(f"Client: {self.client_address}")
+        print(f"Headers:")
         for header, value in self.headers.items():
             print(f"   {header}: {value}")
     
@@ -188,10 +188,10 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
                     "notification": data
                 }, f, indent=2)
             
-            print(f"💾 Notification saved to: {filepath}")
+            print(f"Notification saved to: {filepath}")
             
         except Exception as e:
-            print(f"❌ Error saving notification to file: {e}")
+            print(f"Error saving notification to file: {e}")
     
     def log_message(self, format, *args):
         """Override to reduce server logging noise"""
@@ -200,14 +200,14 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
 def start_webhook_server(port: int = 8000):
     """Start the webhook server"""
     
-    print("🚀 Starting Microsoft Graph Webhook Receiver...")
-    print(f"🌐 Server will run on: http://localhost:{port}")
-    print(f"📡 Webhook URL: http://localhost:{port}")
-    print("🔄 Press Ctrl+C to stop the server\n")
+    print("Starting Microsoft Graph Webhook Receiver...")
+    print(f"Server will run on: http://localhost:{port}")
+    print(f"Webhook URL: http://localhost:{port}")
+    print("Press Ctrl+C to stop the server\n")
     
     try:
         with socketserver.TCPServer(("", port), WebhookHandler) as httpd:
-            print(f"✅ Server started successfully on port {port}")
+            print(f"Server started successfully on port {port}")
             
             # Open browser to show the server is running
             def open_browser():
@@ -220,22 +220,22 @@ def start_webhook_server(port: int = 8000):
             
             threading.Thread(target=open_browser, daemon=True).start()
             
-            print("📌 Use this URL as your notification URL in the Graph webhook tester:")
+            print("Use this URL as your notification URL in the Graph webhook tester:")
             print(f"   http://localhost:{port}")
-            print("\n⏳ Waiting for webhook notifications...\n")
+            print("\nWaiting for webhook notifications...\n")
             
             httpd.serve_forever()
             
     except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
+        print("\nServer stopped by user")
     except OSError as e:
         if e.errno == 10048:  # Port already in use
-            print(f"❌ Port {port} is already in use. Try a different port:")
+            print(f"Port {port} is already in use. Try a different port:")
             print(f"   python webhook_receiver.py --port {port + 1}")
         else:
-            print(f"❌ Error starting server: {e}")
+            print(f"Error starting server: {e}")
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"Unexpected error: {e}")
 
 def main():
     """Main function"""

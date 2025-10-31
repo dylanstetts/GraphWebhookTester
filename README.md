@@ -80,7 +80,6 @@ SecurityWebhooks - ODSP/
    - `Files.ReadWrite.All` (Application/Delegated)
    - `Sites.ReadWrite.All` (Application/Delegated)
    - `User.Read.All` (Application/Delegated) - for enhanced analysis
-   - `AuditLog.Read.All` (Application) - for security audit data
 
 5. **Grant admin consent** for the permissions
 

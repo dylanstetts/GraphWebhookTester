@@ -1,7 +1,7 @@
 # Microsoft Graph Security Webhook Tester - Launch Script
 # This script sets up the environment and launches the application
 
-Write-Host "🚀 Microsoft Graph Security Webhook Tester" -ForegroundColor Green
+Write-Host "Microsoft Graph Security Webhook Tester" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 
 # Check if Python is installed
@@ -18,7 +18,7 @@ try {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $scriptDir
 
-Write-Host "📂 Working directory: $scriptDir" -ForegroundColor Yellow
+Write-Host "Working directory: $scriptDir" -ForegroundColor Yellow
 
 # Check if virtual environment exists
 if (Test-Path ".venv") {

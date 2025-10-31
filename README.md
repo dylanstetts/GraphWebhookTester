@@ -7,7 +7,6 @@ A comprehensive Python GUI application for testing Microsoft Graph change notifi
 - **Enhanced Operation Detection**: Specific operation type identification (permission grants, file uploads, renames, moves, etc.)
 - **Smart Correlation Analysis**: Advanced timing-based correlation between webhooks and actual file changes
 - **Security-Focused Analysis**: Priority scoring for permission changes and security-related operations
-- **Professional Interface**: Clean, emoji-free interface suitable for professional presentations
 - **Organized Project Structure**: Automatic file organization with dedicated folders for logs, webhooks, and analysis
 - **Subscription Management**: View, refresh, and delete subscriptions directly from the GUI
 - **Real-time Analysis**: Analyze webhook notifications as they arrive with comprehensive change tracking
@@ -25,7 +24,7 @@ A comprehensive Python GUI application for testing Microsoft Graph change notifi
 
 ### Modern GUI Interface
 - **Tabbed Interface**: Intuitive organization of functionality
-- **Dual Authentication**: Both interactive (user) and app-only (client credentials) authentication
+- **Dual Authentication**: Both delegated (user) and app-only (client credentials) authentication support
 - **Security Webhooks**: Full support for `Prefer: includesecuritywebhooks` header
 - **Audio Notifications**: Sound feedback for webhook creation and errors
 - **Real-time Monitoring**: Live subscription status and management

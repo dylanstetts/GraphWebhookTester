@@ -1,0 +1,13 @@
+{
+  "client_id": "your-app-client-id-here",
+  "client_secret": "your-app-client-secret-here-optional",
+  "tenant_id": "common",
+  "auth_type": "interactive",
+  "subscription_defaults": {
+    "resource": "/me/drive/root",
+    "change_type": "updated",
+    "notification_url": "https://webhook.site/unique-id-here",
+    "expiration_hours": "24",
+    "include_security_webhooks": true
+  }
+}

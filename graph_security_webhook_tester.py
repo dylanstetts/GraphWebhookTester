@@ -37,10 +37,15 @@ class HTTPLogger:
     """Custom logger for HTTP requests and responses"""
     
     def __init__(self, log_file: str = "logs/graph_api_requests.log"):
-        self.log_file = log_file
+        # Make log file path relative to script directory
+        if not os.path.isabs(log_file):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            self.log_file = os.path.join(script_dir, log_file)
+        else:
+            self.log_file = log_file
         
         # Create logs directory if it doesn't exist
-        log_dir = os.path.dirname(log_file)
+        log_dir = os.path.dirname(self.log_file)
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir)
         
@@ -48,7 +53,7 @@ class HTTPLogger:
         self.logger.setLevel(logging.INFO)
         
         # Create file handler
-        handler = logging.FileHandler(log_file, encoding='utf-8')
+        handler = logging.FileHandler(self.log_file, encoding='utf-8')
         handler.setLevel(logging.INFO)
         
         # Create formatter
@@ -923,12 +928,27 @@ class GraphWebhookTesterGUI:
     def _open_log_file(self):
         """Open the log file in the default text editor"""
         try:
-            if os.path.exists(self.http_logger.log_file):
-                os.startfile(self.http_logger.log_file)
-            else:
-                messagebox.showinfo("Info", "No log file found yet. Make API requests to generate logs.")
+            log_file_path = self.http_logger.log_file
+            
+            # Create the log file if it doesn't exist
+            if not os.path.exists(log_file_path):
+                # Ensure the directory exists
+                log_dir = os.path.dirname(log_file_path)
+                if not os.path.exists(log_dir):
+                    os.makedirs(log_dir)
+                
+                # Create an empty log file
+                with open(log_file_path, 'w', encoding='utf-8') as f:
+                    f.write("# Graph API Requests Log\n")
+                    f.write(f"# Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            
+            # Open the file with the default application
+            os.startfile(log_file_path)
+            
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open log file: {str(e)}")
+            print(f"Debug - Log file path: {getattr(self.http_logger, 'log_file', 'Not set')}")
+            print(f"Debug - Error: {str(e)}")
     
     def _save_config(self):
         """Save configuration to file"""

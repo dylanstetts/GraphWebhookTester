@@ -8,7 +8,7 @@ This approach works much better than delta queries for webhook notifications.
 import json
 import requests
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 import logging
 
@@ -31,6 +31,78 @@ class EnhancedChangeTracker:
         
         # Load configuration
         self.config = self._load_config()
+        
+    def _get_current_utc_time(self) -> datetime:
+        """Get current time in UTC timezone"""
+        return datetime.now(timezone.utc)
+    
+    def _parse_microsoft_timestamp(self, timestamp_str: str) -> Optional[datetime]:
+        """Parse Microsoft Graph timestamp string to timezone-aware datetime"""
+        if not timestamp_str:
+            return None
+        try:
+            # Handle different Microsoft timestamp formats
+            # Format 1: "2023-10-31T15:30:45.1234567Z"
+            if timestamp_str.endswith('Z'):
+                # Remove 'Z' and add UTC timezone info
+                clean_str = timestamp_str[:-1]
+                # Handle microseconds (up to 7 digits, truncate to 6 for Python)
+                if '.' in clean_str:
+                    parts = clean_str.split('.')
+                    if len(parts[1]) > 6:
+                        clean_str = f"{parts[0]}.{parts[1][:6]}"
+                dt = datetime.fromisoformat(clean_str)
+                return dt.replace(tzinfo=timezone.utc)
+            
+            # Format 2: "2023-10-31T15:30:45+00:00"
+            elif '+' in timestamp_str or timestamp_str.count('-') > 2:
+                return datetime.fromisoformat(timestamp_str)
+                
+            # Format 3: Basic ISO format without timezone
+            else:
+                dt = datetime.fromisoformat(timestamp_str)
+                # Assume UTC if no timezone specified
+                return dt.replace(tzinfo=timezone.utc)
+                
+        except Exception as e:
+            self.logger.warning(f"Could not parse timestamp '{timestamp_str}': {e}")
+            return None
+    
+    def _is_time_after(self, time1: datetime, time2: datetime) -> bool:
+        """Safely compare if time1 is after time2, handling timezone awareness"""
+        try:
+            # Ensure both times are timezone-aware
+            if time1.tzinfo is None:
+                time1 = time1.replace(tzinfo=timezone.utc)
+            if time2.tzinfo is None:
+                time2 = time2.replace(tzinfo=timezone.utc)
+            
+            # Convert both to UTC for comparison
+            time1_utc = time1.astimezone(timezone.utc)
+            time2_utc = time2.astimezone(timezone.utc)
+            
+            return time1_utc > time2_utc
+        except Exception as e:
+            self.logger.warning(f"Could not compare times: {e}")
+            return False
+
+    def _calculate_time_difference_seconds(self, time1: datetime, time2: datetime) -> float:
+        """Calculate time difference in seconds between two timezone-aware datetimes"""
+        try:
+            # Ensure both times are timezone-aware
+            if time1.tzinfo is None:
+                time1 = time1.replace(tzinfo=timezone.utc)
+            if time2.tzinfo is None:
+                time2 = time2.replace(tzinfo=timezone.utc)
+            
+            # Convert both to UTC for comparison
+            time1_utc = time1.astimezone(timezone.utc)
+            time2_utc = time2.astimezone(timezone.utc)
+            
+            return abs((time1_utc - time2_utc).total_seconds())
+        except Exception as e:
+            self.logger.warning(f"Could not calculate time difference: {e}")
+            return float('inf')  # Return large number if calculation fails
         
     def _setup_logger(self) -> logging.Logger:
         """Setup logging for change tracker"""
@@ -339,8 +411,9 @@ class EnhancedChangeTracker:
             last_modified = item_details.get('lastModifiedDateTime')
             if last_modified:
                 try:
-                    modified_time = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
-                    time_diff = abs((webhook_time - modified_time.replace(tzinfo=None)).total_seconds())
+                    modified_time = self._parse_microsoft_timestamp(last_modified)
+                    if modified_time:
+                        time_diff = self._calculate_time_difference_seconds(webhook_time, modified_time)
                     
                     if time_diff <= 300:  # Within 5 minutes (more reasonable for folder changes)
                         analysis["analysis_summary"].append({
@@ -362,16 +435,15 @@ class EnhancedChangeTracker:
             
             if recent_items and 'value' in recent_items:
                 # Filter to very recent items (last 10 minutes)
-                from datetime import datetime, timedelta
-                cutoff_time = datetime.now() - timedelta(minutes=10)
+                cutoff_time = self._get_current_utc_time() - timedelta(minutes=10)
                 
                 recent_changes = []
                 for item in recent_items['value'][:20]:  # Check top 20 recent items
                     last_modified = item.get('lastModifiedDateTime')
                     if last_modified:
                         try:
-                            modified_time = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
-                            if modified_time.replace(tzinfo=None) > cutoff_time:
+                            modified_time = self._parse_microsoft_timestamp(last_modified)
+                            if modified_time and self._is_time_after(modified_time, cutoff_time):
                                 recent_changes.append({
                                     "name": item.get('name', 'Unknown'),
                                     "lastModifiedDateTime": last_modified,
@@ -469,7 +541,7 @@ class EnhancedChangeTracker:
         subscription_id = notification.get('subscriptionId', '')
         
         # Get webhook timestamp for correlation
-        webhook_time = datetime.now()  # Approximate webhook receipt time
+        webhook_time = self._get_current_utc_time()  # Get current UTC time for webhook receipt
         
         analysis = {
             "webhook_notification": {  # Use the key the GUI expects
@@ -549,9 +621,10 @@ class EnhancedChangeTracker:
             last_modified = item_details.get('lastModifiedDateTime')
             if last_modified:
                 try:
-                    # Parse ISO datetime
-                    modified_time = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
-                    time_diff = abs((webhook_time - modified_time.replace(tzinfo=None)).total_seconds())
+                    # Parse Microsoft timestamp with proper timezone handling
+                    modified_time = self._parse_microsoft_timestamp(last_modified)
+                    if modified_time:
+                        time_diff = self._calculate_time_difference_seconds(webhook_time, modified_time)
                     
                     analysis["correlation_strategies"].append(f"Strategy 2: Time correlation - {time_diff:.1f}s difference")
                     
@@ -739,19 +812,23 @@ class EnhancedChangeTracker:
         change_type = notification.get('changeType', '')
         subscription_id = notification.get('subscriptionId', '')
         
-        analysis_time = datetime.now()
+        analysis_time = self._get_current_utc_time()
         
         # Try to get the actual webhook timestamp for more accurate correlation
         webhook_timestamp = getattr(self, '_current_webhook_timestamp', None)
         if webhook_timestamp:
             try:
-                # Webhook timestamp is in local time (EST), convert to UTC
-                local_time = datetime.fromisoformat(webhook_timestamp.replace('Z', ''))
-                analysis_time = local_time + timedelta(hours=4)  # EDT to UTC (until Nov 2nd)
-                self.logger.info(f"Webhook {webhook_timestamp} (EST) -> {analysis_time} UTC")
+                # Webhook timestamp is now stored in UTC (normalized by webhook receiver)
+                parsed_timestamp = self._parse_microsoft_timestamp(webhook_timestamp)
+                if parsed_timestamp:
+                    analysis_time = parsed_timestamp
+                    self.logger.info(f"Using webhook timestamp: {webhook_timestamp} (UTC)")
+                else:
+                    analysis_time = self._get_current_utc_time()
+                    self.logger.warning(f"Could not parse webhook timestamp, using current time")
             except Exception as e:
                 self.logger.warning(f"Could not parse webhook timestamp: {e}")
-                analysis_time = datetime.now()
+                analysis_time = self._get_current_utc_time()
         
         # Initialize analysis focused on finding actual changes
         analysis = {
@@ -801,8 +878,8 @@ class EnhancedChangeTracker:
                             # Check if this item had recent file modifications
                             file_recently_modified = False
                             if last_modified:
-                                modified_time = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
-                                if modified_time.replace(tzinfo=None) > cutoff_time:
+                                modified_time = self._parse_microsoft_timestamp(last_modified)
+                                if modified_time and self._is_time_after(modified_time, cutoff_time):
                                     file_recently_modified = True
                                     self.logger.info(f"File {item_name} was recently modified")
                             
@@ -821,7 +898,7 @@ class EnhancedChangeTracker:
                                             if activity_time_str:
                                                 try:
                                                     activity_time = datetime.fromisoformat(activity_time_str.replace('Z', '+00:00'))
-                                                    if activity_time.replace(tzinfo=None) > cutoff_time:
+                                                    if self._is_time_after(activity_time, cutoff_time):
                                                         # Recent activity on this file!
                                                         action = activity.get('action', {})
                                                         actor = activity.get('actor', {})
@@ -942,7 +1019,7 @@ class EnhancedChangeTracker:
                             if change.get('file_recently_modified') and change.get('modified'):
                                 try:
                                     mod_time = datetime.fromisoformat(change['modified'].replace('Z', '+00:00'))
-                                    change_times.append(('file_modification', mod_time.replace(tzinfo=None), change['modified'], ''))
+                                    change_times.append(('file_modification', mod_time, change['modified'], ''))
                                 except Exception:
                                     pass
                             
@@ -952,7 +1029,7 @@ class EnhancedChangeTracker:
                                     perm_time = datetime.fromisoformat(perm_activity['time'].replace('Z', '+00:00'))
                                     operation_type = perm_activity.get('type', 'unknown_operation')
                                     operation_details = perm_activity.get('operation_details', '')
-                                    change_times.append((operation_type, perm_time.replace(tzinfo=None), perm_activity['time'], operation_details))
+                                    change_times.append((operation_type, perm_time, perm_activity['time'], operation_details))
                                 except Exception:
                                     pass
                             
@@ -960,7 +1037,21 @@ class EnhancedChangeTracker:
                             for change_type, change_time, time_str, *extra_details in change_times:
                                 operation_details = extra_details[0] if extra_details else ''
                                 # Calculate if this change happened before the webhook
-                                time_diff = (webhook_time - change_time).total_seconds()  # Webhook - Change
+                                # Need directional time difference (webhook_time - change_time)
+                                try:
+                                    # Ensure timezone awareness
+                                    if webhook_time.tzinfo is None:
+                                        webhook_time = webhook_time.replace(tzinfo=timezone.utc)
+                                    if change_time.tzinfo is None:
+                                        change_time = change_time.replace(tzinfo=timezone.utc)
+                                    
+                                    # Convert to UTC and calculate
+                                    webhook_utc = webhook_time.astimezone(timezone.utc)
+                                    change_utc = change_time.astimezone(timezone.utc)
+                                    time_diff = (webhook_utc - change_utc).total_seconds()  # Webhook - Change
+                                except Exception as e:
+                                    self.logger.warning(f"Could not calculate time difference: {e}")
+                                    continue
                                 
                                 # We want changes that happened before the webhook (positive time_diff)
                                 # but not too long ago (within reasonable webhook delay)

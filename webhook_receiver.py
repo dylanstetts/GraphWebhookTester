@@ -9,9 +9,21 @@ import socketserver
 import json
 import urllib.parse
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 import webbrowser
+
+def get_utc_timestamp() -> str:
+    """Get current UTC timestamp in ISO format"""
+    return datetime.now(timezone.utc).isoformat()
+
+def get_utc_timestamp_filename() -> str:
+    """Get current UTC timestamp formatted for filenames"""
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+def get_utc_display_time() -> str:
+    """Get current UTC time for display purposes"""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 class WebhookHandler(http.server.BaseHTTPRequestHandler):
     """HTTP request handler for webhook notifications"""
@@ -54,7 +66,7 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             <p>Current time: {}</p>
             </body>
             </html>
-            """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            """.format(get_utc_display_time())
             
             self.wfile.write(html.encode('utf-8'))
     
@@ -100,7 +112,7 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             notification_data = json.loads(post_data.decode('utf-8'))
             
             print(f"\nWEBHOOK NOTIFICATION RECEIVED!")
-            print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Time: {get_utc_display_time()}")
             print(f"Raw payload:")
             print(json.dumps(notification_data, indent=2))
             
@@ -133,7 +145,7 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             
-            response = {"status": "received", "timestamp": datetime.now().isoformat()}
+            response = {"status": "received", "timestamp": get_utc_timestamp()}
             self.wfile.write(json.dumps(response).encode('utf-8'))
             
             print("Notification processed successfully!")
@@ -178,13 +190,13 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
             if not os.path.exists(notifications_dir):
                 os.makedirs(notifications_dir)
             
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = get_utc_timestamp_filename()
             filename = f"webhook_notification_{timestamp}.json"
             filepath = os.path.join(notifications_dir, filename)
             
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump({
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": get_utc_timestamp(),
                     "notification": data
                 }, f, indent=2)
             

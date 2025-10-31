@@ -10,7 +10,7 @@ import requests
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import threading
 import time
 import webbrowser
@@ -202,8 +202,8 @@ class GraphSubscriptionManager:
         if not self.authenticator.access_token:
             raise Exception("Not authenticated. Please authenticate first.")
         
-        # Calculate expiration time
-        expiration = datetime.utcnow() + timedelta(hours=expiration_hours)
+        # Calculate expiration time (using proper UTC timezone)
+        expiration = datetime.now(timezone.utc) + timedelta(hours=expiration_hours)
         expiration_str = expiration.strftime("%Y-%m-%dT%H:%M:%S.0000000Z")
         
         # Prepare subscription payload
@@ -1710,7 +1710,8 @@ Response: abc123 (plain text, HTTP 200)"""
                     self.root.after(0, lambda: self._confirm_delete_all(count))
                     
                 except Exception as e:
-                    self.root.after(0, lambda: messagebox.showerror("Error", f"Error getting subscriptions: {str(e)}"))
+                    error_msg = str(e)
+                    self.root.after(0, lambda: messagebox.showerror("Error", f"Error getting subscriptions: {error_msg}"))
             
             # Run in background thread
             threading.Thread(target=count_worker, daemon=True).start()
@@ -1764,7 +1765,8 @@ Response: abc123 (plain text, HTTP 200)"""
                 self.root.after(0, self._refresh_subscription_dropdown)
                 
             except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Error", f"Error deleting subscriptions: {str(e)}"))
+                error_msg = str(e)
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Error deleting subscriptions: {error_msg}"))
         
         # Run in background thread
         threading.Thread(target=delete_all_worker, daemon=True).start()
